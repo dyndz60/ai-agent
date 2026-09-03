@@ -11,13 +11,12 @@ PHONE_NUMBER_ID = os.getenv("WHATSAPP_PHONE_NUMBER_ID")
 VERIFY_TOKEN = os.getenv("VERIFY_TOKEN", "smart_support_bot_verify_token")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
-# إعداد مفتاح الذكاء الاصطناعي
 if OPENAI_API_KEY:
     openai.api_key = OPENAI_API_KEY
 
 @app.route("/", methods=["GET"])
 def home():
-    return "Global AI Sales Agent is live and running!", 200
+    return "Global AI Sales Agent with Binance & USDT is live!", 200
 
 # التحقق من الـ Webhook
 @app.route("/webhook", methods=["GET"])
@@ -33,7 +32,7 @@ def verify_webhook():
             return "Verification failed", 403
     return "Webhook endpoint active.", 200
 
-# استقبال رسائل العملاء من أي دولة والرد عليهم بالذكاء الاصطناعي وبنفس لغتهم
+# استقبال رسائل العملاء والرد عليهم بالذكاء الاصطناعي
 @app.route("/webhook", methods=["POST"])
 def receive_message():
     data = request.get_json()
@@ -51,10 +50,10 @@ def receive_message():
 
                     print(f"Message from {sender_phone}: {message_body}")
 
-                    # توليد رد ذكي واحترافي عبر الذكاء الاصطناعي بناءً على لغة ونوع رسالة العميل
+                    # توليد رد ذكي واحترافي
                     ai_reply = generate_ai_response(message_body)
 
-                    # إرسال الرد للعميل عبر واتساب
+                    # إرسال الرد للعميل
                     send_whatsapp_message(sender_phone, ai_reply)
 
     except Exception as e:
@@ -67,13 +66,16 @@ def generate_ai_response(user_message):
         return "Hello! Thank you for contacting us. How can we help you grow your business today?"
 
     try:
-        # توجيه الذكاء الاصطناعي ليكون وكيل مبيعات محترف يرد بنفس لغة العميل ويعرض خدمات التشغيل الآلي والاشتراك
         prompt = (
             "You are an elite, persuasive global B2B sales agent for an AI automation agency. "
             "Your goal is to help local businesses (restaurants, stores, etc.) automate their customer support "
             "and WhatsApp orders to increase their revenue. "
             "Detect the language of the user's message and reply fluently in that exact same language. "
             "Be professional, concise, and encourage them to subscribe to our monthly automated service. "
+            "If the customer agrees to subscribe or asks how to pay, provide them with our two secure payment methods: "
+            "1. Binance ID: 784156162 (Binance Pay) "
+            "2. USDT (TRC20 Network Address): TMejUgCAzn9ZvjMvfhpzedPtpT9YDQpPMQ "
+            "Instruct them to send a screenshot of the transfer proof after payment. "
             f"User message: {user_message}"
         )
 
@@ -85,7 +87,7 @@ def generate_ai_response(user_message):
         return response.choices[0].message['content'].strip()
     except Exception as e:
         print(f"OpenAI Error: {e}")
-        return "Hello! We offer advanced AI automation solutions for your business. Would you like to know more about our monthly plans?"
+        return "Hello! We offer advanced AI automation solutions for your business. You can subscribe via Binance ID: 784156162 or USDT TRC20: TMejUgCAzn9ZvjMvfhpzedPtpT9YDQpPMQ"
 
 def send_whatsapp_message(recipient_phone, text):
     url = f"https://graph.facebook.com/v18.0/{PHONE_NUMBER_ID}/messages"
