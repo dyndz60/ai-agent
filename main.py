@@ -8,7 +8,7 @@ app = Flask(__name__)
 # جلب بيانات الاعتماد ومتغيرات البيئة
 WHATSAPP_TOKEN = os.getenv("WHATSAPP_ACCESS_TOKEN")
 PHONE_NUMBER_ID = os.getenv("WHATSAPP_PHONE_NUMBER_ID")
-VERIFY_TOKEN = os.getenv("VERIFY_TOKEN", "smart_support_bot_verify_token")
+VERIFY_TOKEN = os.getenv("VERIFY_TOKEN", "smart_agent_verify_token_123")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
 if OPENAI_API_KEY:
@@ -16,9 +16,9 @@ if OPENAI_API_KEY:
 
 @app.route("/", methods=["GET"])
 def home():
-    return "Global AI Sales Agent with Binance & USDT is live!", 200
+    return "Global AI Sales Agent with Binance Pay & USDT is Live!"
 
-# التحقق من الـ Webhook
+# التحقق من الويب هوك الخاص بـ Meta
 @app.route("/webhook", methods=["GET"])
 def verify_webhook():
     mode = request.args.get("hub.mode")
@@ -30,81 +30,68 @@ def verify_webhook():
             return challenge, 200
         else:
             return "Verification failed", 403
-    return "Webhook endpoint active.", 200
+    return "Hello World", 200
 
-# استقبال رسائل العملاء والرد عليهم بالذكاء الاصطناعي
+# استقبال رسائل واتساب والرد عبر الذكاء الاصطناعي
 @app.route("/webhook", methods=["POST"])
 def receive_message():
     data = request.get_json()
-    print("Received data:", data)
-
+    
     try:
-        if "entry" in data and data["entry"]:
-            changes = data["entry"][0].get("changes", [])
-            if changes and "value" in changes[0]:
-                value = changes[0]["value"]
-                if "messages" in value:
-                    message = value["messages"][0]
-                    sender_phone = message["from"]
-                    message_body = message.get("text", {}).get("body", "")
-
-                    print(f"Message from {sender_phone}: {message_body}")
-
-                    # توليد رد ذكي واحترافي
-                    ai_reply = generate_ai_response(message_body)
-
-                    # إرسال الرد للعميل
-                    send_whatsapp_message(sender_phone, ai_reply)
-
+        if data and "entry" in data:
+            for entry in data["entry"]:
+                for change in entry.get("changes", []):
+                    value = change.get("value", {})
+                    if "messages" in value:
+                        message = value["messages"][0]
+                        from_number = message["from"]
+                        msg_body = message["text"]["body"]
+                        
+                        # توليد الرد باستخدام OpenAI GPT
+                        ai_response = generate_ai_response(msg_body)
+                        
+                        # إرسال الرد عبر WhatsApp Cloud API
+                        send_whatsapp_message(from_number, ai_response)
+                        
+        return jsonify({"status": "success"}), 200
     except Exception as e:
-        print(f"Error: {e}")
-
-    return jsonify({"status": "success"}), 200
+        print(f"Error processing message: {e}")
+        return jsonify({"status": "error"}), 200
 
 def generate_ai_response(user_message):
-    if not OPENAI_API_KEY:
-        return "Hello! Thank you for contacting us. How can we help you grow your business today?"
-
     try:
         prompt = (
-            "You are an elite, persuasive global B2B sales agent for an AI automation agency. "
-            "Your goal is to help local businesses (restaurants, stores, etc.) automate their customer support "
-            "and WhatsApp orders to increase their revenue. "
-            "Detect the language of the user's message and reply fluently in that exact same language. "
-            "Be professional, concise, and encourage them to subscribe to our monthly automated service. "
-            "If the customer agrees to subscribe or asks how to pay, provide them with our two secure payment methods: "
-            "1. Binance ID: 784156162 (Binance Pay) "
-            "2. USDT (TRC20 Network Address): TMejUgCAzn9ZvjMvfhpzedPtpT9YDQpPMQ "
-            "Instruct them to send a screenshot of the transfer proof after payment. "
+            "You are a professional, multilingual AI sales agent for B2B lead generation and order automation. "
+            "You handle cross-border sales and payment collection via crypto-assets: "
+            "Binance Pay (UID: 784156162) and USDT-TRC20 (Address: TMejUgCAzn9ZvjMvfhpzedPtpT9YDQpPMQ). "
+            "Detect the user's language dynamically and respond in that same language. "
+            "Be persuasive, helpful, and guide them to complete their purchase using the crypto payment methods provided. "
             f"User message: {user_message}"
         )
-
+        
         response = openai.ChatCompletion.create(
             model="gpt-3.5-turbo",
             messages=[{"role": "user", "content": prompt}],
-            max_tokens=150
+            max_tokens=300
         )
-        return response.choices[0].message['content'].strip()
+        return response.choices[0].message["content"].strip()
     except Exception as e:
-        print(f"OpenAI Error: {e}")
-        return "Hello! We offer advanced AI automation solutions for your business. You can subscribe via Binance ID: 784156162 or USDT TRC20: TMejUgCAzn9ZvjMvfhpzedPtpT9YDQpPMQ"
+        return "Hello! Thank you for your interest. We are currently experiencing a brief technical issue, but please feel free to pay via Binance Pay (UID: 784156162) or USDT-TRC20 (Address: TMejUgCAzn9ZvjMvfhpzedPtpT9YDQpPMQ)."
 
-def send_whatsapp_message(recipient_phone, text):
-    url = f"https://graph.facebook.com/v18.0/{PHONE_NUMBER_ID}/messages"
+def send_whatsapp_message(to_number, message_text):
+    url = f"https://graph.facebook.com/v17.0/{PHONE_NUMBER_ID}/messages"
     headers = {
         "Authorization": f"Bearer {WHATSAPP_TOKEN}",
-        "Content-Type": "application/json",
+        "Content-Type": "application/json"
     }
     payload = {
         "messaging_product": "whatsapp",
-        "to": recipient_phone,
+        "to": to_number,
         "type": "text",
-        "text": {"body": text},
+        "text": {"body": message_text}
     }
-
-    response = requests.post(url, json=payload, headers=headers)
-    print("WhatsApp send response:", response.json())
+    requests.post(url, headers=headers, json=payload)
 
 if __name__ == "__main__":
-    port = int(os.getenv("PORT", 5000))
+    port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
