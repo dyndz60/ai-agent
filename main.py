@@ -1,59 +1,108 @@
-from fastapi import FastAPI, Request, HTTPException
+import os
 import requests
+from flask import Flask, request, jsonify
+import openai
 
-app = FastAPI()
+app = Flask(__name__)
 
-OPENAI_API_KEY = "YOUR_OPENAI_API_KEY"
-WHATSAPP_TOKEN = "YOUR_WHATSAPP_TOKEN"
-VERIFY_TOKEN = "0667275812Aa"
+# جلب بيانات الاعتماد ومتغيرات البيئة
+WHATSAPP_TOKEN = os.getenv("WHATSAPP_ACCESS_TOKEN")
+PHONE_NUMBER_ID = os.getenv("WHATSAPP_PHONE_NUMBER_ID")
+VERIFY_TOKEN = os.getenv("VERIFY_TOKEN", "smart_support_bot_verify_token")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
-@app.get("/webhook")
-async def verify_webhook(request: Request):
-    mode = request.query_params.get("hub.mode")
-    token = request.query_params.get("hub.verify_token")
-    challenge = request.query_params.get("hub.challenge")
-    
+# إعداد مفتاح الذكاء الاصطناعي
+if OPENAI_API_KEY:
+    openai.api_key = OPENAI_API_KEY
+
+@app.route("/", methods=["GET"])
+def home():
+    return "Global AI Sales Agent is live and running!", 200
+
+# التحقق من الـ Webhook
+@app.route("/webhook", methods=["GET"])
+def verify_webhook():
+    mode = request.args.get("hub.mode")
+    token = request.args.get("hub.verify_token")
+    challenge = request.args.get("hub.challenge")
+
     if mode and token:
         if mode == "subscribe" and token == VERIFY_TOKEN:
-            return int(challenge)
+            return challenge, 200
         else:
-            raise HTTPException(status_code=403, detail="Verification token mismatch")
-    raise HTTPException(status_code=400, detail="Invalid request")
+            return "Verification failed", 403
+    return "Webhook endpoint active.", 200
 
-@app.post("/webhook")
-async def receive_message(request: Request):
-    data = await request.json()
-    
+# استقبال رسائل العملاء من أي دولة والرد عليهم بالذكاء الاصطناعي وبنفس لغتهم
+@app.route("/webhook", methods=["POST"])
+def receive_message():
+    data = request.get_json()
+    print("Received data:", data)
+
     try:
-        message = data['entry'][0]['changes'][0]['value']['messages'][0]
-        user_text = message['text']['body']
-        sender_id = message['from']
-        
-        ai_response = ask_ai(user_text)
-        send_whatsapp(sender_id, ai_response)
+        if "entry" in data and data["entry"]:
+            changes = data["entry"][0].get("changes", [])
+            if changes and "value" in changes[0]:
+                value = changes[0]["value"]
+                if "messages" in value:
+                    message = value["messages"][0]
+                    sender_phone = message["from"]
+                    message_body = message.get("text", {}).get("body", "")
+
+                    print(f"Message from {sender_phone}: {message_body}")
+
+                    # توليد رد ذكي واحترافي عبر الذكاء الاصطناعي بناءً على لغة ونوع رسالة العميل
+                    ai_reply = generate_ai_response(message_body)
+
+                    # إرسال الرد للعميل عبر واتساب
+                    send_whatsapp_message(sender_phone, ai_reply)
+
     except Exception as e:
-        pass
-        
-    return {"status": "success"}
+        print(f"Error: {e}")
 
-def ask_ai(prompt):
-    headers = {"Authorization": f"Bearer {OPENAI_API_KEY}"}
-    payload = {
-        "model": "gpt-4o-mini",
-        "messages": [
-            {"role": "system", "content": "أنت مساعد مبيعات للمتجر، أجب باختصار ولطف."},
-            {"role": "user", "content": prompt}
-        ]
+    return jsonify({"status": "success"}), 200
+
+def generate_ai_response(user_message):
+    if not OPENAI_API_KEY:
+        return "Hello! Thank you for contacting us. How can we help you grow your business today?"
+
+    try:
+        # توجيه الذكاء الاصطناعي ليكون وكيل مبيعات محترف يرد بنفس لغة العميل ويعرض خدمات التشغيل الآلي والاشتراك
+        prompt = (
+            "You are an elite, persuasive global B2B sales agent for an AI automation agency. "
+            "Your goal is to help local businesses (restaurants, stores, etc.) automate their customer support "
+            "and WhatsApp orders to increase their revenue. "
+            "Detect the language of the user's message and reply fluently in that exact same language. "
+            "Be professional, concise, and encourage them to subscribe to our monthly automated service. "
+            f"User message: {user_message}"
+        )
+
+        response = openai.ChatCompletion.create(
+            model="gpt-3.5-turbo",
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=150
+        )
+        return response.choices[0].message['content'].strip()
+    except Exception as e:
+        print(f"OpenAI Error: {e}")
+        return "Hello! We offer advanced AI automation solutions for your business. Would you like to know more about our monthly plans?"
+
+def send_whatsapp_message(recipient_phone, text):
+    url = f"https://graph.facebook.com/v18.0/{PHONE_NUMBER_ID}/messages"
+    headers = {
+        "Authorization": f"Bearer {WHATSAPP_TOKEN}",
+        "Content-Type": "application/json",
     }
-    res = requests.post("https://api.openai.com/v1/chat/completions", json=payload, headers=headers)
-    return res.json()['choices'][0]['message']['content']
-
-def send_whatsapp(to, text):
-    headers = {"Authorization": f"Bearer {WHATSAPP_TOKEN}"}
     payload = {
         "messaging_product": "whatsapp",
-        "to": to,
+        "to": recipient_phone,
         "type": "text",
-        "text": {"body": text}
+        "text": {"body": text},
     }
-    requests.post("https://graph.facebook.com/v18.0/YOUR_PHONE_NUMBER_ID/messages", json=payload, headers=headers)
+
+    response = requests.post(url, json=payload, headers=headers)
+    print("WhatsApp send response:", response.json())
+
+if __name__ == "__main__":
+    port = int(os.getenv("PORT", 5000))
+    app.run(host="0.0.0.0", port=port)
