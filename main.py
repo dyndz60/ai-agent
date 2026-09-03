@@ -1,10 +1,24 @@
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, HTTPException
 import requests
 
 app = FastAPI()
 
 OPENAI_API_KEY = "YOUR_OPENAI_API_KEY"
 WHATSAPP_TOKEN = "YOUR_WHATSAPP_TOKEN"
+VERIFY_TOKEN = "0667275812Aa"
+
+@app.get("/webhook")
+async def verify_webhook(request: Request):
+    mode = request.query_params.get("hub.mode")
+    token = request.query_params.get("hub.verify_token")
+    challenge = request.query_params.get("hub.challenge")
+    
+    if mode and token:
+        if mode == "subscribe" and token == VERIFY_TOKEN:
+            return int(challenge)
+        else:
+            raise HTTPException(status_code=403, detail="Verification token mismatch")
+    raise HTTPException(status_code=400, detail="Invalid request")
 
 @app.post("/webhook")
 async def receive_message(request: Request):
@@ -43,4 +57,3 @@ def send_whatsapp(to, text):
         "text": {"body": text}
     }
     requests.post("https://graph.facebook.com/v18.0/YOUR_PHONE_NUMBER_ID/messages", json=payload, headers=headers)
-  
